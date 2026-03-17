@@ -1,328 +1,349 @@
-import React, { useState, useMemo } from 'react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Median Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Small CSS additions for animations that Tailwind CDN might handle differently */
+        .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 200ms; }
+        .duration-300 { transition-duration: 300ms; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800">
 
-// Helper function for ordinal numbers (1st, 2nd, 3rd, etc.)
-function getOrdinal(n) {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-}
-
-export default function App() {
-  const [k, setK] = useState(10);
-
-  // Core Data Logic
-  const { frequencies, cumulative, dots, totalN, medianPositions, medianValue } = useMemo(() => {
-    const freqs = [5, 11, 18, 9, k];
-    const cumuls = [];
-    const allDots = [];
-    
-    let runningTotal = 0;
-    let dotPosition = 1;
-
-    freqs.forEach((freq, value) => {
-      runningTotal += freq;
-      cumuls.push(runningTotal);
-      
-      for (let i = 0; i < freq; i++) {
-        allDots.push({
-          value,
-          localIndex: i, // To stack them vertically
-          position: dotPosition // Global sorted position (1 to N)
-        });
-        dotPosition++;
-      }
-    });
-
-    const N = runningTotal;
-    let medPositions = [];
-    let medValue = 0;
-
-    if (N === 0) {
-       // Edge case safeguard
-       return { frequencies: freqs, cumulative: cumuls, dots: allDots, totalN: N, medianPositions: [], medianValue: 0 };
-    }
-
-    if (N % 2 !== 0) {
-      // Odd N
-      const pos = (N + 1) / 2;
-      medPositions = [pos];
-      medValue = allDots.find(d => d.position === pos).value;
-    } else {
-      // Even N
-      const pos1 = N / 2;
-      const pos2 = (N / 2) + 1;
-      medPositions = [pos1, pos2];
-      const val1 = allDots.find(d => d.position === pos1).value;
-      const val2 = allDots.find(d => d.position === pos2).value;
-      medValue = (val1 + val2) / 2;
-    }
-
-    return {
-      frequencies: freqs,
-      cumulative: cumuls,
-      dots: allDots,
-      totalN: N,
-      medianPositions: medPositions,
-      medianValue: medValue
-    };
-  }, [k]);
-
-  // SVG Configuration
-  const SVG_WIDTH = 400;
-  const SVG_HEIGHT = 550;
-  const BOTTOM_MARGIN = 60;
-  const DOT_SPACING = 7.5;
-  const DOT_RADIUS = 3.5;
-
-  // Calculate coordinates specifically for the median annotations
-  const medianDotCoords = useMemo(() => {
-    return medianPositions.map(pos => {
-      const dot = dots.find(d => d.position === pos);
-      if (!dot) return { x: 0, y: 0 };
-      return {
-        x: 50 + dot.value * 75,
-        y: SVG_HEIGHT - BOTTOM_MARGIN - 10 - dot.localIndex * DOT_SPACING
-      };
-    });
-  }, [medianPositions, dots]);
-
-  return (
-    <div className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-800">
-      <div className="max-w-6xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+    <div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
         
-        {/* Header */}
-        <div className="p-6 md:p-8 border-b border-slate-200 bg-slate-50">
-          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Interactive Median & Dot Diagram
-          </h1>
-          <p className="text-slate-600 mt-2 text-sm md:text-base">
-            Adjust the frequency <strong className="text-blue-600">k</strong> for the "4 watches" group using the slider below. Notice how the total number of people ($N$) changes, and watch the median position dynamically shift across the dot diagram.
-          </p>
+        <!-- Header -->
+        <div class="p-6 md:p-8 border-b border-slate-200 bg-slate-50">
+            <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+                Interactive Median & Dot Diagram
+            </h1>
+            <p class="text-slate-600 mt-2 text-sm md:text-base">
+                Adjust the frequency <strong class="text-blue-600">k</strong> for the "4 watches" group using the slider below. Notice how the total number of people (N) changes, and watch the median position dynamically shift across the dot diagram.
+            </p>
         </div>
 
-        <div className="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
-          
-          {/* Left Column: Controls & Math */}
-          <div className="flex flex-col space-y-6">
+        <div class="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
             
-            {/* The Data Table */}
-            <div className="overflow-x-auto rounded-xl border border-slate-300 shadow-sm">
-              <table className="w-full text-center text-sm md:text-base border-collapse">
-                <tbody>
-                  <tr>
-                    <th className="border-b border-r border-slate-300 bg-slate-100 p-3 font-semibold text-slate-700 text-left w-1/3">
-                      Number of watches
-                    </th>
-                    {[0, 1, 2, 3, 4].map(val => (
-                      <td key={`header-${val}`} className={`border-b border-slate-300 p-3 bg-white ${val === 4 ? 'font-bold text-slate-800 bg-slate-50' : ''}`}>
-                        {val}
-                      </td>
-                    ))}
-                  </tr>
-                  <tr>
-                    <th className="border-r border-slate-300 bg-slate-100 p-3 font-semibold text-slate-700 text-left">
-                      Number of people
-                    </th>
-                    <td className="p-3 bg-white text-slate-600">5</td>
-                    <td className="p-3 bg-white text-slate-600">11</td>
-                    <td className="p-3 bg-white text-slate-600">18</td>
-                    <td className="p-3 bg-white text-slate-600">9</td>
-                    <td className="p-3 bg-blue-100 text-blue-800 font-bold transition-colors">
-                      {k}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* K Control Slider */}
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <label className="flex justify-between items-center text-sm font-semibold text-slate-700 mb-4">
-                <span>Adjust frequency for 4 watches (k):</span>
-                <span className="bg-blue-600 text-white px-4 py-1.5 rounded-full text-lg shadow-sm">
-                  k = {k}
-                </span>
-              </label>
-              <input 
-                type="range" 
-                min="0" 
-                max="60" 
-                value={k} 
-                onChange={(e) => setK(Number(e.target.value))}
-                className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-              />
-              <div className="flex justify-between text-xs text-slate-400 mt-2 font-medium">
-                <span>0</span>
-                <span>Max (60)</span>
-              </div>
-            </div>
-
-            {/* Step-by-Step Calculation Panel */}
-            <div className="bg-blue-50/50 p-6 rounded-xl border border-blue-100 flex-grow">
-              <h3 className="font-semibold text-blue-900 mb-4 flex items-center text-lg">
-                <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                Calculation Breakdown
-              </h3>
-              
-              <div className="space-y-4 text-slate-700">
-                <p>
-                  <strong>1. Total People ($N$):</strong> 
-                  <br className="md:hidden"/> 5 + 11 + 18 + 9 + {k} = <strong className="text-blue-700 text-lg">{totalN}</strong>
-                </p>
+            <!-- Left Column: Controls & Math -->
+            <div class="flex flex-col space-y-6">
                 
-                <p>
-                  <strong>2. Median Position:</strong> 
-                  <br className="md:hidden"/> Since {totalN} is <strong>{totalN % 2 === 0 ? "even" : "odd"}</strong>, the median is located at{' '}
-                  {totalN % 2 === 0 
-                    ? <span>the average of the <strong>{getOrdinal(medianPositions[0])}</strong> and <strong>{getOrdinal(medianPositions[1])}</strong> positions.</span> 
-                    : <span>the <strong>{getOrdinal(medianPositions[0])}</strong> position.</span>}
-                </p>
-                
-                <div className="mt-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">Cumulative Frequencies</p>
-                  <div className="flex flex-wrap gap-2">
-                    {cumulative.map((cf, i) => {
-                      const isTarget = (totalN % 2 !== 0 && medianPositions[0] <= cf && (i === 0 || medianPositions[0] > cumulative[i-1])) || 
-                                       (totalN % 2 === 0 && (medianPositions[0] <= cf && (i === 0 || medianPositions[0] > cumulative[i-1]) || medianPositions[1] <= cf && (i === 0 || medianPositions[1] > cumulative[i-1])));
-                      return (
-                        <div key={i} className={`px-2.5 py-1.5 rounded-md text-xs flex flex-col items-center border ${isTarget ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
-                          <span className={`${isTarget ? 'text-red-500 font-semibold' : 'text-slate-500'} mb-1`}>{i} watches</span>
-                          <span className={`font-mono ${isTarget ? 'text-red-700 font-bold' : 'text-slate-700'}`}>cf: {cf}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
+                <!-- The Data Table -->
+                <div class="overflow-x-auto rounded-xl border border-slate-300 shadow-sm">
+                    <table class="w-full text-center text-sm md:text-base border-collapse">
+                        <tbody>
+                            <tr>
+                                <th class="border-b border-r border-slate-300 bg-slate-100 p-3 font-semibold text-slate-700 text-left w-1/3">
+                                    Number of watches
+                                </th>
+                                <td class="border-b border-slate-300 p-3 bg-white">0</td>
+                                <td class="border-b border-slate-300 p-3 bg-white">1</td>
+                                <td class="border-b border-slate-300 p-3 bg-white">2</td>
+                                <td class="border-b border-slate-300 p-3 bg-white">3</td>
+                                <td class="border-b border-slate-300 p-3 bg-white font-bold text-slate-800 bg-slate-50">4</td>
+                            </tr>
+                            <tr>
+                                <th class="border-r border-slate-300 bg-slate-100 p-3 font-semibold text-slate-700 text-left">
+                                    Number of people
+                                </th>
+                                <td class="p-3 bg-white text-slate-600">5</td>
+                                <td class="p-3 bg-white text-slate-600">11</td>
+                                <td class="p-3 bg-white text-slate-600">18</td>
+                                <td class="p-3 bg-white text-slate-600">9</td>
+                                <td class="p-3 bg-blue-100 text-blue-800 font-bold transition-colors" id="table-k-val">
+                                    10
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
-                
-                <div className="mt-6 pt-5 border-t border-blue-200/60 flex items-center justify-between">
-                  <span className="text-lg font-bold text-slate-800">Final Median Value:</span>
-                  <span className="text-red-600 font-black text-4xl bg-red-50 px-4 py-1 rounded-lg border border-red-100 shadow-sm">
-                    {medianValue}
-                  </span>
+
+                <!-- K Control Slider -->
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <label class="flex justify-between items-center text-sm font-semibold text-slate-700 mb-4">
+                        <span>Adjust frequency for 4 watches (k):</span>
+                        <span class="bg-blue-600 text-white px-4 py-1.5 rounded-full text-lg shadow-sm" id="badge-k-val">
+                            k = 10
+                        </span>
+                    </label>
+                    <input 
+                        type="range" 
+                        min="0" 
+                        max="60" 
+                        value="10" 
+                        id="k-slider"
+                        class="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                    />
+                    <div class="flex justify-between text-xs text-slate-400 mt-2 font-medium">
+                        <span>0</span>
+                        <span>Max (60)</span>
+                    </div>
                 </div>
-              </div>
-            </div>
-            
-          </div>
 
-          {/* Right Column: Dot Diagram */}
-          <div className="flex flex-col items-center justify-center bg-white rounded-xl p-4 border border-slate-200 shadow-inner overflow-hidden">
-            <h3 className="font-bold text-slate-700 mb-4 text-center">Dot Diagram Distribution</h3>
-            
-            <div className="w-full max-w-[400px] overflow-visible relative">
-              <svg width="100%" height={SVG_HEIGHT} viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} className="overflow-visible">
-                
-                {/* Background Grid Lines (Horizontal) */}
-                {[...Array(10)].map((_, i) => (
-                  <line key={`grid-${i}`} x1="30" y1={SVG_HEIGHT - BOTTOM_MARGIN - (i * 10 * DOT_SPACING)} x2={SVG_WIDTH - 30} y2={SVG_HEIGHT - BOTTOM_MARGIN - (i * 10 * DOT_SPACING)} stroke="#f1f5f9" strokeWidth="1" />
-                ))}
-
-                {/* X Axis Line */}
-                <line x1="30" y1={SVG_HEIGHT - BOTTOM_MARGIN} x2={SVG_WIDTH - 30} y2={SVG_HEIGHT - BOTTOM_MARGIN} stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
-                
-                {/* X Axis Labels */}
-                {[0, 1, 2, 3, 4].map((v) => {
-                  const x = 50 + v * 75;
-                  return (
-                    <g key={`axis-${v}`}>
-                      <line x1={x} y1={SVG_HEIGHT - BOTTOM_MARGIN} x2={x} y2={SVG_HEIGHT - BOTTOM_MARGIN + 5} stroke="#94a3b8" strokeWidth="2" />
-                      <text x={x} y={SVG_HEIGHT - BOTTOM_MARGIN + 22} textAnchor="middle" fill="#475569" fontSize="14" fontWeight={v === 4 ? "bold" : "normal"}>{v}</text>
-                    </g>
-                  );
-                })}
-                
-                <text x={SVG_WIDTH / 2} y={SVG_HEIGHT - 10} textAnchor="middle" fontSize="14" fill="#64748b" fontWeight="600">
-                  Number of watches
-                </text>
-
-                {/* Data Dots */}
-                {dots.map(dot => {
-                  const x = 50 + dot.value * 75;
-                  const y = SVG_HEIGHT - BOTTOM_MARGIN - 10 - dot.localIndex * DOT_SPACING;
-                  const isMedian = medianPositions.includes(dot.position);
-                  
-                  return (
-                    <circle
-                      key={`dot-${dot.position}`}
-                      cx={x}
-                      cy={y}
-                      r={DOT_RADIUS}
-                      fill={isMedian ? "#dc2626" : (dot.value === 4 ? "#60a5fa" : "#94a3b8")}
-                      className="transition-all duration-200"
-                    />
-                  );
-                })}
-
-                {/* Median Highlights & Annotations */}
-                {medianPositions.map(pos => {
-                  const dot = dots.find(d => d.position === pos);
-                  if (!dot) return null;
-                  const x = 50 + dot.value * 75;
-                  const y = SVG_HEIGHT - BOTTOM_MARGIN - 10 - dot.localIndex * DOT_SPACING;
-                  
-                  return (
-                    <circle
-                      key={`highlight-${pos}`}
-                      cx={x}
-                      cy={y}
-                      r={DOT_RADIUS * 2.5}
-                      fill="#ef4444"
-                      fillOpacity="0.4"
-                      className="animate-pulse pointer-events-none"
-                    />
-                  );
-                })}
-
-                {/* Specific Median Labeling logic depending on whether N is odd or even */}
-                {medianDotCoords.length > 0 && (
-                  <g className="transition-all duration-300 pointer-events-none">
-                    {medianPositions.length === 1 && (
-                      <g>
-                        <text x={medianDotCoords[0].x + 15} y={medianDotCoords[0].y + 4} fill="#dc2626" fontSize="12" fontWeight="bold">Median</text>
-                        <line x1={medianDotCoords[0].x + 5} y1={medianDotCoords[0].y} x2={medianDotCoords[0].x + 13} y2={medianDotCoords[0].y} stroke="#dc2626" strokeWidth="1.5" />
-                      </g>
-                    )}
+                <!-- Step-by-Step Calculation Panel -->
+                <div class="bg-blue-50/50 p-6 rounded-xl border border-blue-100 flex-grow">
+                    <h3 class="font-semibold text-blue-900 mb-4 flex items-center text-lg">
+                        <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        Calculation Breakdown
+                    </h3>
                     
-                    {medianPositions.length === 2 && medianValue % 1 === 0 && (
-                      <g>
-                        {/* Both median dots are in the same column (stacked). Point to the middle of them */}
-                        <text x={medianDotCoords[0].x + 15} y={(medianDotCoords[0].y + medianDotCoords[1].y)/2 + 4} fill="#dc2626" fontSize="12" fontWeight="bold">Median</text>
-                        <line x1={medianDotCoords[0].x + 5} y1={(medianDotCoords[0].y + medianDotCoords[1].y)/2} x2={medianDotCoords[0].x + 13} y2={(medianDotCoords[0].y + medianDotCoords[1].y)/2} stroke="#dc2626" strokeWidth="1.5" />
-                      </g>
-                    )}
+                    <div class="space-y-4 text-slate-700">
+                        <p>
+                            <strong>1. Total People (N):</strong> 
+                            <br class="md:hidden"/> 5 + 11 + 18 + 9 + <span id="calc-k-val">10</span> = <strong class="text-blue-700 text-lg" id="total-n"></strong>
+                        </p>
+                        
+                        <p>
+                            <strong>2. Median Position:</strong> 
+                            <br class="md:hidden"/> Since <span id="total-n-repeat"></span> is <strong id="parity-text"></strong>, the median is located at <span id="median-desc-text"></span>
+                        </p>
+                        
+                        <div class="mt-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                            <p class="text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">Cumulative Frequencies</p>
+                            <div class="flex flex-wrap gap-2" id="cumulative-container">
+                                <!-- Cumulative blocks injected here via JS -->
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6 pt-5 border-t border-blue-200/60 flex items-center justify-between">
+                            <span class="text-lg font-bold text-slate-800">Final Median Value:</span>
+                            <span class="text-red-600 font-black text-4xl bg-red-50 px-4 py-1 rounded-lg border border-red-100 shadow-sm" id="median-value">
+                                <!-- Median Value -->
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
 
-                    {medianPositions.length === 2 && medianValue % 1 !== 0 && (
-                      <g>
-                        {/* Median dots are in adjacent columns. Draw a bridge between them */}
-                        <line 
-                          x1={medianDotCoords[0].x} y1={medianDotCoords[0].y} 
-                          x2={medianDotCoords[1].x} y2={medianDotCoords[1].y} 
-                          stroke="#dc2626" strokeDasharray="3 3" strokeWidth="1.5" 
-                        />
-                        <rect x={((medianDotCoords[0].x + medianDotCoords[1].x)/2) - 25} y={Math.min(medianDotCoords[0].y, medianDotCoords[1].y) - 25} width="50" height="20" fill="white" fillOpacity="0.8" rx="4" />
-                        <text 
-                          x={(medianDotCoords[0].x + medianDotCoords[1].x)/2} 
-                          y={Math.min(medianDotCoords[0].y, medianDotCoords[1].y) - 11} 
-                          textAnchor="middle" fill="#dc2626" fontSize="12" fontWeight="bold"
-                        >
-                          Avg: {medianValue}
-                        </text>
-                      </g>
-                    )}
-                  </g>
-                )}
-              </svg>
+            <!-- Right Column: Dot Diagram -->
+            <div class="flex flex-col items-center justify-center bg-white rounded-xl p-4 border border-slate-200 shadow-inner overflow-hidden">
+                <h3 class="font-bold text-slate-700 mb-4 text-center">Dot Diagram Distribution</h3>
+                
+                <div class="w-full max-w-[400px] overflow-visible relative">
+                    <svg id="dot-diagram" width="100%" height="550" viewBox="0 0 400 550" class="overflow-visible">
+                        <!-- SVG Elements injected here via JS -->
+                    </svg>
+                </div>
+                
+                <div class="flex space-x-6 mt-2 text-xs text-slate-500 bg-slate-100 px-4 py-2 rounded-full border border-slate-200">
+                    <span class="flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-slate-400 mr-2"></span> Data Points</span>
+                    <span class="flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-blue-400 mr-2"></span> Group k</span>
+                    <span class="flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse mr-2"></span> Median</span>
+                </div>
             </div>
-            
-            <div className="flex space-x-6 mt-2 text-xs text-slate-500 bg-slate-100 px-4 py-2 rounded-full border border-slate-200">
-              <span className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-slate-400 mr-2"></span> Data Points</span>
-              <span className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-blue-400 mr-2"></span> Group k</span>
-              <span className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse mr-2"></span> Median</span>
-            </div>
-          </div>
 
         </div>
-      </div>
     </div>
-  );
-}
+
+    <script>
+        // Helper function for ordinal numbers
+        function getOrdinal(n) {
+            const s = ["th", "st", "nd", "rd"];
+            const v = n % 100;
+            return n + (s[(v - 20) % 10] || s[v] || s[0]);
+        }
+
+        // SVG Configuration Constants
+        const SVG_WIDTH = 400;
+        const SVG_HEIGHT = 550;
+        const BOTTOM_MARGIN = 60;
+        const DOT_SPACING = 7.5;
+        const DOT_RADIUS = 3.5;
+
+        // Base Data
+        const baseFreqs = [5, 11, 18, 9];
+
+        // Core Update Logic
+        function updateDiagram(k) {
+            // Update UI texts for K
+            document.getElementById('table-k-val').textContent = k;
+            document.getElementById('badge-k-val').textContent = `k = ${k}`;
+            document.getElementById('calc-k-val').textContent = k;
+
+            // Calculate frequencies, dots, and cumulative values
+            const freqs = [...baseFreqs, k];
+            const cumuls = [];
+            const allDots = [];
+            
+            let runningTotal = 0;
+            let dotPosition = 1;
+
+            freqs.forEach((freq, value) => {
+                runningTotal += freq;
+                cumuls.push(runningTotal);
+                
+                for (let i = 0; i < freq; i++) {
+                    allDots.push({
+                        value: value,
+                        localIndex: i, 
+                        position: dotPosition
+                    });
+                    dotPosition++;
+                }
+            });
+
+            const N = runningTotal;
+            let medianPositions = [];
+            let medianValue = 0;
+
+            if (N > 0) {
+                if (N % 2 !== 0) {
+                    const pos = (N + 1) / 2;
+                    medianPositions = [pos];
+                    medianValue = allDots.find(d => d.position === pos).value;
+                } else {
+                    const pos1 = N / 2;
+                    const pos2 = (N / 2) + 1;
+                    medianPositions = [pos1, pos2];
+                    const val1 = allDots.find(d => d.position === pos1).value;
+                    const val2 = allDots.find(d => d.position === pos2).value;
+                    medianValue = (val1 + val2) / 2;
+                }
+            }
+
+            // Update Math Text DOM
+            document.getElementById('total-n').textContent = N;
+            document.getElementById('total-n-repeat').textContent = N;
+            document.getElementById('parity-text').textContent = N % 2 === 0 ? 'even' : 'odd';
+            
+            const medianDescEl = document.getElementById('median-desc-text');
+            if (N % 2 === 0) {
+                medianDescEl.innerHTML = `the average of the <strong>${getOrdinal(medianPositions[0])}</strong> and <strong>${getOrdinal(medianPositions[1])}</strong> positions.`;
+            } else {
+                medianDescEl.innerHTML = `the <strong>${getOrdinal(medianPositions[0])}</strong> position.`;
+            }
+
+            document.getElementById('median-value').textContent = medianValue;
+
+            // Render Cumulative Frequencies
+            const cumulativeContainer = document.getElementById('cumulative-container');
+            let cfHTML = '';
+            cumuls.forEach((cf, i) => {
+                let isTarget = false;
+                if (N % 2 !== 0) {
+                    isTarget = medianPositions[0] <= cf && (i === 0 || medianPositions[0] > cumuls[i-1]);
+                } else {
+                    isTarget = (medianPositions[0] <= cf && (i === 0 || medianPositions[0] > cumuls[i-1])) || 
+                               (medianPositions[1] <= cf && (i === 0 || medianPositions[1] > cumuls[i-1]));
+                }
+
+                const bgClass = isTarget ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200';
+                const labelClass = isTarget ? 'text-red-500 font-semibold' : 'text-slate-500';
+                const valClass = isTarget ? 'text-red-700 font-bold' : 'text-slate-700';
+
+                cfHTML += `
+                    <div class="px-2.5 py-1.5 rounded-md text-xs flex flex-col items-center border ${bgClass}">
+                        <span class="${labelClass} mb-1">${i} watches</span>
+                        <span class="font-mono ${valClass}">cf: ${cf}</span>
+                    </div>
+                `;
+            });
+            cumulativeContainer.innerHTML = cfHTML;
+
+            // Generate SVG DOM Structure
+            let svgHTML = '';
+
+            // Grid lines
+            for (let i = 0; i < 10; i++) {
+                const yPos = SVG_HEIGHT - BOTTOM_MARGIN - (i * 10 * DOT_SPACING);
+                svgHTML += `<line x1="30" y1="${yPos}" x2="${SVG_WIDTH - 30}" y2="${yPos}" stroke="#f1f5f9" stroke-width="1" />`;
+            }
+
+            // X Axis
+            svgHTML += `<line x1="30" y1="${SVG_HEIGHT - BOTTOM_MARGIN}" x2="${SVG_WIDTH - 30}" y2="${SVG_HEIGHT - BOTTOM_MARGIN}" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" />`;
+
+            // X Axis Labels
+            [0, 1, 2, 3, 4].forEach(v => {
+                const x = 50 + v * 75;
+                const fontWeight = v === 4 ? "bold" : "normal";
+                svgHTML += `
+                    <g>
+                        <line x1="${x}" y1="${SVG_HEIGHT - BOTTOM_MARGIN}" x2="${x}" y2="${SVG_HEIGHT - BOTTOM_MARGIN + 5}" stroke="#94a3b8" stroke-width="2" />
+                        <text x="${x}" y="${SVG_HEIGHT - BOTTOM_MARGIN + 22}" text-anchor="middle" fill="#475569" font-size="14" font-weight="${fontWeight}">${v}</text>
+                    </g>
+                `;
+            });
+
+            svgHTML += `<text x="${SVG_WIDTH / 2}" y="${SVG_HEIGHT - 10}" text-anchor="middle" font-size="14" fill="#64748b" font-weight="600">Number of watches</text>`;
+
+            // Data Dots
+            allDots.forEach(dot => {
+                const x = 50 + dot.value * 75;
+                const y = SVG_HEIGHT - BOTTOM_MARGIN - 10 - dot.localIndex * DOT_SPACING;
+                const isMedian = medianPositions.includes(dot.position);
+                const fill = isMedian ? "#dc2626" : (dot.value === 4 ? "#60a5fa" : "#94a3b8");
+                
+                svgHTML += `<circle cx="${x}" cy="${y}" r="${DOT_RADIUS}" fill="${fill}" class="transition-all duration-200" />`;
+            });
+
+            // Median Annotations
+            const medianDotCoords = medianPositions.map(pos => {
+                const dot = allDots.find(d => d.position === pos);
+                if (!dot) return {x: 0, y: 0};
+                return {
+                    x: 50 + dot.value * 75,
+                    y: SVG_HEIGHT - BOTTOM_MARGIN - 10 - dot.localIndex * DOT_SPACING
+                };
+            });
+
+            medianPositions.forEach(pos => {
+                const dot = allDots.find(d => d.position === pos);
+                if (!dot) return;
+                const x = 50 + dot.value * 75;
+                const y = SVG_HEIGHT - BOTTOM_MARGIN - 10 - dot.localIndex * DOT_SPACING;
+                svgHTML += `<circle cx="${x}" cy="${y}" r="${DOT_RADIUS * 2.5}" fill="#ef4444" fill-opacity="0.4" class="animate-pulse pointer-events-none" />`;
+            });
+
+            if (medianDotCoords.length > 0) {
+                svgHTML += `<g class="transition-all duration-300 pointer-events-none">`;
+                
+                if (medianPositions.length === 1) {
+                    svgHTML += `
+                        <text x="${medianDotCoords[0].x + 15}" y="${medianDotCoords[0].y + 4}" fill="#dc2626" font-size="12" font-weight="bold">Median</text>
+                        <line x1="${medianDotCoords[0].x + 5}" y1="${medianDotCoords[0].y}" x2="${medianDotCoords[0].x + 13}" y2="${medianDotCoords[0].y}" stroke="#dc2626" stroke-width="1.5" />
+                    `;
+                }
+                
+                if (medianPositions.length === 2 && medianValue % 1 === 0) {
+                    const midY = (medianDotCoords[0].y + medianDotCoords[1].y) / 2;
+                    svgHTML += `
+                        <text x="${medianDotCoords[0].x + 15}" y="${midY + 4}" fill="#dc2626" font-size="12" font-weight="bold">Median</text>
+                        <line x1="${medianDotCoords[0].x + 5}" y1="${midY}" x2="${medianDotCoords[0].x + 13}" y2="${midY}" stroke="#dc2626" stroke-width="1.5" />
+                    `;
+                }
+
+                if (medianPositions.length === 2 && medianValue % 1 !== 0) {
+                    const midX = (medianDotCoords[0].x + medianDotCoords[1].x) / 2;
+                    const minY = Math.min(medianDotCoords[0].y, medianDotCoords[1].y);
+                    svgHTML += `
+                        <line x1="${medianDotCoords[0].x}" y1="${medianDotCoords[0].y}" x2="${medianDotCoords[1].x}" y2="${medianDotCoords[1].y}" stroke="#dc2626" stroke-dasharray="3 3" stroke-width="1.5" />
+                        <rect x="${midX - 25}" y="${minY - 25}" width="50" height="20" fill="white" fill-opacity="0.8" rx="4" />
+                        <text x="${midX}" y="${minY - 11}" text-anchor="middle" fill="#dc2626" font-size="12" font-weight="bold">Avg: ${medianValue}</text>
+                    `;
+                }
+
+                svgHTML += `</g>`;
+            }
+
+            document.getElementById('dot-diagram').innerHTML = svgHTML;
+        }
+
+        // Event Listener for the Range Slider
+        const slider = document.getElementById('k-slider');
+        slider.addEventListener('input', (e) => {
+            updateDiagram(parseInt(e.target.value, 10));
+        });
+
+        // Initialize on load
+        updateDiagram(10);
+    </script>
+</body>
+</html>
